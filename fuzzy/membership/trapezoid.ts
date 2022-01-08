@@ -35,7 +35,7 @@ export class TrapezoidShape implements MembershipFunction {
         if (x < this.toHigh)
             return 1;
         if (x < this.toLow)
-            return 1 - (x - this.toHigh) / (this.toHigh - this.toLow);
+            return 1 - (x - this.toHigh) / (this.toLow - this.toHigh);
 
         return 0;
     }
@@ -48,23 +48,27 @@ export class TrapezoidShape implements MembershipFunction {
      * @returns Area of the shape within the bounding box.
      */
     getArea(from: number, to: number, cutoffHeight: number): number {
+        cutoffHeight = Math.min(cutoffHeight, 1);
+
         const x1 = Math.max(this.fromLow, from);
-        const x4 = Math.max(this.toLow, to);
+        const x4 = Math.min(this.toLow, to);
 
         const cutoffHeightInv = 1 - cutoffHeight;
         const x2 = cutoffHeight * this.fromHigh + cutoffHeightInv * this.fromLow;
         const x3 = cutoffHeight * this.toHigh + cutoffHeightInv * this.toLow;
 
-        const leftArea = (this.evaluate(x1) + this.evaluate(x2)) * (x2 - x1) / 2;
-        const rightArea = (this.evaluate(x3) + this.evaluate(x4)) * (x4 - x3) / 2;
+        const leftArea = (this.evaluate(x1) + cutoffHeight) * (x2 - x1) / 2;
+        const rightArea = (this.evaluate(x4) + cutoffHeight) * (x4 - x3) / 2;
         const middleArea = (x3 - x2) * cutoffHeight;
 
         return leftArea + middleArea + rightArea;
     }
 
     getXCenterOfMassTimesArea(from: number, to: number, cutoffHeight: number): number {
+        cutoffHeight = Math.min(cutoffHeight, 1);
+
         const x1 = Math.max(this.fromLow, from);
-        const x4 = Math.max(this.toLow, to);
+        const x4 = Math.min(this.toLow, to);
 
         const cutoffHeightInv = 1 - cutoffHeight;
         const x2 = cutoffHeight * this.fromHigh + cutoffHeightInv * this.fromLow;
@@ -75,14 +79,20 @@ export class TrapezoidShape implements MembershipFunction {
         const y3 = cutoffHeight;
         const y4 = this.evaluate(x4);
 
-        const leftSlope = (y2 - y1) / (x2 - x1);
-        const rightSlope = (y4 - y3) / (x4 - x3);
-
-        const left = (x2*x2) * (y1/2 + leftSlope/3 * x2 - leftSlope/2 * x1) -
-                     (x1*x1) * (y1/2 + leftSlope/3 * x1 - leftSlope/2 * x1);
+        let left = 0;
+        if (x2 > x1) {
+            const leftSlope = (y2 - y1) / (x2 - x1);
+            
+            left = (x2*x2) * (y1/2 + leftSlope/3 * x2 - leftSlope/2 * x1) -
+            (x1*x1) * (y1/2 + leftSlope/3 * x1 - leftSlope/2 * x1);
+        }
         
-        const right = (x4*x4) * (y3/2 + rightSlope/3 * x4 - rightSlope/2 * x3) -
-                     (x3*x3) * (y3/2 + rightSlope/3 * x3 - rightSlope/2 * x3);
+        let right = 0;
+        if (x4 > x3) {
+            const rightSlope = (y4 - y3) / (x4 - x3);
+            right = (x4*x4) * (y3/2 + rightSlope/3 * x4 - rightSlope/2 * x3) -
+                        (x3*x3) * (y3/2 + rightSlope/3 * x3 - rightSlope/2 * x3);
+        }
 
         return left + right + (cutoffHeight / 2) * (x3*x3 - x2*x2);
     }
@@ -90,21 +100,21 @@ export class TrapezoidShape implements MembershipFunction {
     getLineSegments(cutoffHeight: number): LineSegment[] {
         return [
             // Floor before
-            new LineSegment(0, 0, -Number.NEGATIVE_INFINITY, this.fromLow),
+            { slope: 0, b: 0, from: Number.NEGATIVE_INFINITY, to: this.fromLow },
             // Rising edge
             MakeLineSegment.restrictYDomain(
                 MakeLine.fromPointAndSlope({ x: this.fromLow, y: 0 }, this.fromLow === this.fromHigh ? Number.POSITIVE_INFINITY : 1 / (this.fromHigh - this.fromLow)),
                 0, cutoffHeight // from, to
             ),
             // Const
-            new LineSegment(0, cutoffHeight, this.fromHigh, this.toHigh),
+            { slope: 0, b: cutoffHeight, from: this.fromHigh, to: this.toHigh },
             // Falling edge
             MakeLineSegment.restrictYDomain(
                 MakeLine.fromPointAndSlope({ x: this.toLow, y: 0 }, this.toHigh === this.toLow ? Number.NEGATIVE_INFINITY : 1 / (this.toHigh - this.toLow)),
                 0, cutoffHeight // from, to
             ),
             // Floor after
-            new LineSegment(0, 0, this.toLow, Number.POSITIVE_INFINITY),
+            { slope: 0, b: 0, from: this.toLow, to: Number.POSITIVE_INFINITY },
         ];
     }
 }

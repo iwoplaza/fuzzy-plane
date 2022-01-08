@@ -1,4 +1,4 @@
-import { Line, LineSegment, MakeLine } from './intersection';
+import { AsLineSegment } from './intersection/lineSegment';
 import { TrapezoidShape } from './membership';
 import { MembershipFunction, MembershipFunctionBuilder } from './membership/types';
 import { Vec2 } from './vector';
@@ -29,7 +29,7 @@ export class Fuzzifier {
 }
 
 export class FuzzyVar {
-    constructor(private fuzzifier: Fuzzifier) {
+    constructor(private key: string, private fuzzifier: Fuzzifier) {
         
     }
 
@@ -40,7 +40,7 @@ export class FuzzyVar {
 
         return {
             computeCertainty: (values: {[key: string]: number}) => {
-                return this.fuzzifier.membershipFunctionsMap[fuzzyValueLabel].evaluate(values[fuzzyValueLabel]);
+                return this.fuzzifier.membershipFunctionsMap[fuzzyValueLabel].evaluate(values[this.key]);
             },
         };
     }
@@ -70,7 +70,7 @@ function resolveTwoTrapezoids(primary: TrapezoidShape, certaintyA: number, repla
                 continue;
             }
 
-            const point = LineSegment.intersect(aLine, bLine);
+            const point = AsLineSegment.intersect(aLine, bLine);
             if (point == null)
                 continue;
 
@@ -121,6 +121,11 @@ export class FuzzyLogic {
                 
         
         const functionsList = this.outputFuzzifier.membershipFunctions;
+        const certaintyMap: {[key: string]: number} = {};
+        functionsList.forEach(([variableKey, ]) => certaintyMap[variableKey] = this.rulesMap[variableKey].computeCertainty(values));
+
+        console.log({ certaintyMap, values });
+
         // In this simpler solution, we assume the first function is the left-most function.
         let currentShapeIdx = 0;
         let intersection: { point: Vec2, nextShapeIdx: number }|null = null;
@@ -129,6 +134,7 @@ export class FuzzyLogic {
             from: Number.NEGATIVE_INFINITY,
             shapeIdx: currentShapeIdx,
         });
+
         
         while (currentShapeIdx < functionsList.length) {
             const [varA, shapeA] = functionsList[currentShapeIdx];
@@ -140,10 +146,10 @@ export class FuzzyLogic {
                 
                 const [varB, shapeB] = functionsList[i];
                 const resolver = this.getResolver(shapeA.type, shapeB.type);
-                let points = resolver(shapeA, values[varA], shapeB, values[varB]);
+                let points = resolver(shapeA, certaintyMap[varA], shapeB, certaintyMap[varB]);
 
                 if (intersection !== null) {
-                    points = points.filter(p => p[0] >= intersection.point[0]);
+                    points = points.filter(p => p.x >= intersection.point.x);
                 }
 
                 if (points.length > 0) {
@@ -165,9 +171,10 @@ export class FuzzyLogic {
                     shapeIdx: intersection.nextShapeIdx
                 });
                 currentShapeIdx = intersection.nextShapeIdx;
-                break;
             }
         }
+
+        console.log(breakpoints);
 
         let totalCenterOfMassTimesArea = 0;
         let totalArea = 0;
@@ -177,13 +184,15 @@ export class FuzzyLogic {
             const nextBreakpoint = breakpoints[i + 1] || { from: Number.POSITIVE_INFINITY, shapeIdx: -1 };
             
             const [variable, shape] = functionsList[breakpoint.shapeIdx];
-            const area = shape.getArea(breakpoint.from, nextBreakpoint.from, values[variable]);
-            const centerOfMassTimesArea = shape.getXCenterOfMassTimesArea(breakpoint.from, nextBreakpoint.from, values[variable]);
-
-            console.log(breakpoint);
+            const area = shape.getArea(breakpoint.from, nextBreakpoint.from, certaintyMap[variable]);
+            const centerOfMassTimesArea = shape.getXCenterOfMassTimesArea(breakpoint.from, nextBreakpoint.from, certaintyMap[variable]);
 
             totalArea += area;
             totalCenterOfMassTimesArea += centerOfMassTimesArea;
+        }
+
+        if (totalArea == 0) {
+            return null;
         }
 
         return totalCenterOfMassTimesArea / totalArea;
@@ -193,3 +202,19 @@ export class FuzzyLogic {
 export interface ICondition {
     computeCertainty(values: {[key: string]: number}): number;
 }
+
+export const all = (...conds: ICondition[]): ICondition => {
+    return {
+        computeCertainty(values) {
+            return conds.reduce((prev, a) => Math.min(prev, a.computeCertainty(values)), 1);
+        },
+    };
+};
+
+export const any = (...conds: ICondition[]): ICondition => {
+    return {
+        computeCertainty(values) {
+            return conds.reduce((prev, a) => Math.max(prev, a.computeCertainty(values)), 0);
+        },
+    };
+};

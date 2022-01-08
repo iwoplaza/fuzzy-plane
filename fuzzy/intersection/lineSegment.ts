@@ -1,39 +1,35 @@
-import { Line, MakeLine } from './line';
+import * as Line from './line';
 import { Vec2 } from '../vector';
 
 
-export class LineSegment extends Line {
+export interface LineSegment extends Line.Line {
     /**
      * Smaller bound (y if vertical, x otherwise)
      */
-     public readonly from: number;
+    from: number;
 
     /**
      * Bigger bound (y if vertical, x otherwise)
      */
-     public readonly to: number;
+    to: number;
+}
 
-    constructor(slope: number, b: number, from: number, to: number) {
-        super(slope, b);
-        this.from = from;
-        this.to = to;
-    }
-
+export namespace AsLineSegment {
     /**
      * Evaluates the line segment y at a given x.
      * @param x 
      * @throws Error if segment is vertical.
      * @returns Null if point doesn't belong to the segment (ends-inclusive), number otherwise.
      */
-    evaluateAtX(x: number): number|null {
-        if (this.isVertical()) {
+    export const evaluateAtX = (line: LineSegment, x: number): number|null => {
+        if (Line.isVertical(line)) {
             throw new Error(`Cannot evaluate vertical line segment given an x coordinate.`);
         }
 
-        if (x < this.from || x > this.to)
+        if (x < line.from || x > line.to)
             return null;
 
-        return this.slope * x + this.b;
+        return line.slope * x + line.b;
     }
 
     /**
@@ -42,40 +38,41 @@ export class LineSegment extends Line {
      * @throws Error if segment is horizontal.
      * @returns Null if point doesn't belong to the segment (ends-inclusive), number otherwise.
      */
-    evaluateAtY(y: number): number|null {
-        if (this.isHorizontal()) {
+    export const evaluateAtY = (line: LineSegment, y: number): number|null => {
+        if (Line.isHorizontal(line)) {
             throw new Error(`Cannot evaluate horizontal line segment given a y coordinate.`);
         }
 
-        const x = this.evaluateLineAtY(y);
-        if (x < this.from || x > this.to)
+        const x = Line.evaluateLineAtY(line, y);
+        if (x < line.from || x > line.to)
             return null;
 
         return x;
     }
 
+    
     /**
      * Computes point of intersection between two line segments (including their end points).
      * @param line1 
      * @param line2 
      * @returns Null if segments don't intersect.
      */
-    static intersect(line1: LineSegment, line2: LineSegment): Vec2|null {
-        if (line1.isVertical() && line2.isVertical()) {
+    export const intersect = (line1: LineSegment, line2: LineSegment): Vec2|null => {
+        if (Line.isVertical(line1) && Line.isVertical(line2)) {
             return (line1.b === line2.b && line2.to >= line1.from && line2.from <= line1.to) ? { x: line1.b, y: 0 } : null;
         }
 
-        if (line1.isVertical() || line2.isVertical()) {
+        if (Line.isVertical(line1) || Line.isVertical(line2)) {
             // Assume line 2 is vertical
-            if (line1.isVertical()) {
+            if (Line.isVertical(line1)) {
                 const t = line1;
                 line1 = line2;
                 line2 = t;
             }
 
             const x2 = line2.b;
-            const y = line1.evaluateAtX(x2);
-            if (y === null) {
+            const y = AsLineSegment.evaluateAtX(line1, x2);
+            if (y === null || y < line2.from || y > line2.to) {
                 return null;
             }
 
@@ -83,36 +80,60 @@ export class LineSegment extends Line {
         }
 
         // Both segments are non-vertical
-        const x = (line2.b - line1.b) / (line1.slope - line2.slope);
+        const point = Line.intersect(line1, line2);
 
-        if (x < line2.from || x > line2.to) // Checks inclusion with line2 range
+        if (point === null)
             return null;
 
-        const y = line1.evaluateAtX(x);
-        if (y === null) // Checks inclusion with line1 range
+        // Checking bounds inclusion.
+        if (point.x < line1.from || point.x > line1.to || point.x < line2.from || point.x > line2.to)
             return null;
-        
-        return { x, y };
+
+        return point;
     }
 }
 
 export namespace MakeLineSegment {
-    export function betweenPoints(p1: Vec2, p2: Vec2) {
+    export function betweenPoints(p1: Vec2, p2: Vec2): LineSegment {
         if (p1.x === p2.x) {
             // Vertical
             if (p1.y < p2.y) {
-                return new LineSegment(Number.POSITIVE_INFINITY, p1.x, p1.y, p2.y);
+                return {
+                    slope: Number.POSITIVE_INFINITY,
+                    b: p1.x,
+                    from: p1.y,
+                    to: p2.y
+                };
             }
             else {
-                return new LineSegment(Number.NEGATIVE_INFINITY, p1.x, p2.y, p1.y);
+                return {
+                    slope: Number.NEGATIVE_INFINITY,
+                    b: p1.x,
+                    from: p2.y,
+                    to: p1.y
+                };
             }
         }
 
-        return restrictXDomain(MakeLine.betweenPoints(p1, p2), p1.x, p2.x);
+        return restrictXDomain(Line.MakeLine.betweenPoints(p1, p2), p1.x, p2.x);
+    }
+
+    export function horizontal(y: number, xFrom: number, xTo: number) {
+        return {
+            slope: 0,
+            b: y,
+            from: xFrom,
+            to: xTo,
+        };
     }
 
     export function vertical(x: number, yFrom: number, yTo: number) {
-        return new LineSegment(Number.POSITIVE_INFINITY, x, yFrom, yTo);
+        return {
+            slope: Number.POSITIVE_INFINITY,
+            b: x,
+            from: yFrom,
+            to: yTo,
+        };
     }
         /**
      * Creates a new line segment, based on the same line as this one, but with a new value range in the x axis.
@@ -120,8 +141,13 @@ export namespace MakeLineSegment {
      * @param x2 
      * @returns A new line segment.
      */
-    export function restrictXDomain(line: Line, x1: number, x2: number): LineSegment {
-        return new LineSegment(line.slope, line.b, Math.min(x1, x2), Math.max(x1, x2));
+    export function restrictXDomain(line: Line.Line, x1: number, x2: number): LineSegment {
+        return {
+            slope: line.slope,
+            b: line.b,
+            from: Math.min(x1, x2),
+            to: Math.max(x1, x2),
+        };
     }
 
     /**
@@ -130,9 +156,15 @@ export namespace MakeLineSegment {
      * @param y2 
      * @returns A new line segment.
      */
-    export function restrictYDomain(line: Line, y1: number, y2: number): LineSegment {
-        const x1 = line.evaluateLineAtY(y1);
-        const x2 = line.evaluateLineAtY(y2);
-        return new LineSegment(line.slope, line.b, Math.min(x1, x2), Math.max(x1, x2));
+    export function restrictYDomain(line: Line.Line, y1: number, y2: number): LineSegment {
+        const x1 = Line.evaluateLineAtY(line, y1);
+        const x2 = Line.evaluateLineAtY(line, y2);
+
+        return {
+            slope: line.slope,
+            b: line.b,
+            from: Math.min(x1, x2),
+            to: Math.max(x1, x2),
+        };
     }
 }
