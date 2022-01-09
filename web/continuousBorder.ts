@@ -28,8 +28,7 @@ export class ContinuousBorder extends Group implements ContinuousEntity1D {
     }
 
     public updateViewerPosition(viewerZ: number): void {
-        if (viewerZ > this.anchor.position.z + this.instanceLength + 6)
-        {
+        if (viewerZ > this.anchor.position.z + this.instanceLength + 20) {
             this.anchor.position.z += this.instanceLength;
         }
     }

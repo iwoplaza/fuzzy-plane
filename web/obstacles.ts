@@ -9,8 +9,8 @@ const boxMaterial = new MeshBasicMaterial({
 
 
 export class Obstacles extends Group implements ContinuousEntity1D {
-    private readonly minDistanceBetweenObstacles: number = 20;
-    private readonly maxDistanceBetweenObstacles: number = 30;
+    private readonly minDistanceBetweenObstacles: number = 50;
+    private readonly maxDistanceBetweenObstacles: number = 200;
     private instances: Object3D[] = [];
     private nextSpawnPosition: number = 200;
 
@@ -23,6 +23,8 @@ export class Obstacles extends Group implements ContinuousEntity1D {
     private spawnObstacle(zPosition: number) {
         const obstacle = new Mesh(boxGeometry);
         obstacle.material = boxMaterial;
+
+        const left = Math.random() > 0.5;
 
         obstacle.position.set((Math.random() * 2 - 1) * this.roadWidth / 2, 0, zPosition);
 

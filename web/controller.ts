@@ -1,4 +1,4 @@
-import { FuzzyLogic, Fuzzifier, FuzzyVar } from '../fuzzy/logic';
+import { FuzzyLogic, Fuzzifier, FuzzyVar, all, any } from '../fuzzy/logic';
 import { Trapezoid } from '../fuzzy/membership';
 
 export interface ControllerInput {
@@ -13,13 +13,13 @@ export interface IController {
 }
 
 export class Controller implements IController {
-    logic: any;
+    logic: FuzzyLogic;
 
     constructor() {
         const distance = new Fuzzifier([
-            ['very close', new Trapezoid().from(-1, 0).to(1, 3)],
-            ['close', new Trapezoid().from(1, 3).to(10, 20)],
-            ['far', new Trapezoid().from(10, 20).to(200, 1000)],
+            ['very close', new Trapezoid().from(0, 0).to(10, 30)],
+            ['close', new Trapezoid().from(10, 30).to(50, 200)],
+            ['far', new Trapezoid().from(50, 200).to(200, 1000)],
         ]);
 
         const tilt = new Fuzzifier([
@@ -30,10 +30,10 @@ export class Controller implements IController {
             ['big right', new Trapezoid().from(0.4, 0.7).to(1)],
         ]);
 
-        const leftBorder = new FuzzyVar(distance);
-        const rightBorder = new FuzzyVar(distance);
-        const leftEye = new FuzzyVar(distance);
-        const rightEye = new FuzzyVar(distance);
+        const leftBorder = new FuzzyVar('left border', distance);
+        const rightBorder = new FuzzyVar('right border', distance);
+        const leftEye = new FuzzyVar('left eye', distance);
+        const rightEye = new FuzzyVar('right eye', distance);
 
         this.logic = new FuzzyLogic(tilt, [
             leftBorder,
@@ -41,20 +41,20 @@ export class Controller implements IController {
             leftEye,
             rightEye
         ], {
-            'big left':     rightBorder.is('very close'),
+            'big left':     any(rightEye.is('close'), rightEye.is('very close')),
             'small left':   rightBorder.is('close'),
-            'neutral':      rightBorder.is('far'),
+            'neutral':      any(rightBorder.is('far'), leftBorder.is('far')),
             'small right':  leftBorder.is('close'),
-            'big right':    leftBorder.is('very close'),
+            'big right':    any(leftEye.is('close'), leftEye.is('very close')),
         });
     }
 
     computeTiltAcceleration(input: ControllerInput): number {
-        return this.logic.determine([
-            input.leftBorderDistance,
-            input.rightBorderDistance,
-            input.leftEyeDistance,
-            input.rightEyeDistance
-        ]);
+        return this.logic.determine({
+            'left border': input.leftBorderDistance,
+            'right border': input.rightBorderDistance,
+            'left eye': input.leftEyeDistance,
+            'right eye': input.rightEyeDistance
+        }) || 0;
     }
 }

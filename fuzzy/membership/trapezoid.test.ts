@@ -66,6 +66,14 @@ test('calculates area of symmetrical trapezoid', () => {
     expect(area).toBeCloseTo(constantRadius * 2 + edgeWidth);
 });
 
+test('calculates are of triangular trapezoid', () => {
+    const trapezoid = new Trapezoid().from(-0.5, -0.3).to(-0.3, -0.1).result;
+
+    const area = trapezoid.getArea(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 1);
+    
+    expect(area).toBeCloseTo(0.2);
+});
+
 test('calculates area of cutoff symmetrical trapezoid', () => {
     const center = Math.random() * 200 - 100;
     const constantRadius = 0 + Math.random() * 200;

@@ -4,6 +4,10 @@ import { Controller, ControllerInput, IController } from './controller';
 import { Obstacles } from './obstacles';
 import { Plane } from './plane';
 
+function sigmoid(z) {
+    return 2 / (1 + Math.exp(-z)) + 1;
+}
+
 export class ThreeContext {
     private renderer: WebGLRenderer;
     private scene: Scene;
@@ -11,8 +15,8 @@ export class ThreeContext {
     private clock: Clock;
 
     private readonly roadWidth: number = 30;
-    private readonly leftEyeDirection: Vector3 = new Vector3(-0.2, 0, 1);
-    private readonly rightEyeDirection: Vector3 = new Vector3(0.2, 0, 1);
+    private readonly leftEyeDirection: Vector3 = new Vector3(-0.1, 0, 1);
+    private readonly rightEyeDirection: Vector3 = new Vector3(0.1, 0, 1);
 
     private plane: Plane;
     private leftBorder: ContinuousBorder;
@@ -21,13 +25,15 @@ export class ThreeContext {
     private leftEyeRayHelper: ArrowHelper;
     private rightEyeRayHelper: ArrowHelper;
 
-    private controllerInput: ControllerInput = {
+    public controllerInput: ControllerInput = {
         leftBorderDistance: Number.POSITIVE_INFINITY,
         rightBorderDistance: Number.POSITIVE_INFINITY,
         leftEyeDistance: Number.POSITIVE_INFINITY,
         rightEyeDistance: Number.POSITIVE_INFINITY,
     };
-    private controller: IController;
+    public controller: IController;
+    public planeTiltAcceleration = 0;
+    public planeVelocityX: number = 0;
 
     constructor(private readonly containerElement: HTMLDivElement) {
         this.renderer = new WebGLRenderer();
@@ -52,8 +58,8 @@ export class ThreeContext {
         // Setting up the scene
         this.plane = new Plane();
         this.scene.add(this.plane);
-        this.plane.add(this.camera);
         this.camera.lookAt(this.plane.position);
+        this.plane.position.x = -5;
 
         this.leftBorder = new ContinuousBorder();
         this.leftBorder.position.x = -this.roadWidth/2;
@@ -104,15 +110,29 @@ export class ThreeContext {
     }
 
     render() {
+        // Updating physics
         const delta = Math.min(this.clock.getDelta(), 0.5);
         this.plane.position.z += delta * 100;
+        this.plane.position.x += this.planeVelocityX * delta;
+        this.plane.position.x = Math.max(-this.roadWidth / 2, Math.min(this.plane.position.x, this.roadWidth / 2));
 
+        // Updating anchors
+        this.camera.position.setZ(this.plane.position.z - 20);
+
+        // Calculating input
         const leftDistance = this.computeRayDistance(this.leftEyeRayHelper.position, this.leftEyeDirection);
         this.leftEyeRayHelper.setLength(Math.min(leftDistance, 200));
         const rightDistance = this.computeRayDistance(this.rightEyeRayHelper.position, this.rightEyeDirection);
         this.rightEyeRayHelper.setLength(Math.min(rightDistance, 200));
 
-        const tiltAcc = this.controller.computeTiltAcceleration(this.controllerInput);
+        this.controllerInput.leftBorderDistance = this.roadWidth / 2 + this.plane.position.x;
+        this.controllerInput.rightBorderDistance = this.roadWidth / 2 - this.plane.position.x;
+        this.controllerInput.leftEyeDistance = leftDistance;
+        this.controllerInput.rightEyeDistance = rightDistance;
+
+        this.planeTiltAcceleration = this.controller.computeTiltAcceleration(this.controllerInput) * 10;
+        this.planeVelocityX += this.planeTiltAcceleration * delta * 10;
+        this.plane.setRotationFromAxisAngle(new Vector3(0, 0, 1), sigmoid(-this.planeVelocityX * 0.1) * Math.PI / 2);
 
         this.leftBorder.updateViewerPosition(this.plane.position.z);
         this.rightBorder.updateViewerPosition(this.plane.position.z);
