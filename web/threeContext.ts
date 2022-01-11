@@ -20,6 +20,7 @@ export class ThreeContext {
     private readonly roadWidth: number = 30;
     private readonly leftEyeDirection: Vector3 = new Vector3(0.1, 0, 1);
     private readonly rightEyeDirection: Vector3 = new Vector3(-0.1, 0, 1);
+    private readonly eyeFieldOfView: number = 10;
 
     private plane: Plane;
     private leftBorder: ContinuousBorder;
@@ -149,10 +150,22 @@ export class ThreeContext {
         // Updating anchors
         this.camera.position.setZ(this.plane.position.z - 20);
 
+        this.leftEyeDirection.copy((() => {
+            const angle = Math.random() * this.eyeFieldOfView / 2 / 180.0 * Math.PI;
+
+            return new Vector3(Math.sin(angle), 0, Math.cos(angle));
+        })());
+
+        this.rightEyeDirection.copy((() => {
+            return new Vector3(-this.leftEyeDirection.x, this.leftEyeDirection.y, this.leftEyeDirection.z);
+        })());
+
         // Calculating input
         const leftDistance = this.computeRayDistance(this.leftEyeRayHelper.position, this.leftEyeDirection);
+        this.leftEyeRayHelper.setDirection(this.leftEyeDirection);
         this.leftEyeRayHelper.setLength(Math.min(leftDistance, 200));
         const rightDistance = this.computeRayDistance(this.rightEyeRayHelper.position, this.rightEyeDirection);
+        this.rightEyeRayHelper.setDirection(this.rightEyeDirection);
         this.rightEyeRayHelper.setLength(Math.min(rightDistance, 200));
 
         this.controllerInput.leftBorderDistance = Math.abs(this.roadWidth / 2 - this.plane.position.x);
