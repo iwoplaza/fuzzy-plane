@@ -3,19 +3,33 @@
 }
 
 .main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas: 'title title'
+    'graphs canvas';
   min-height: 100vh;
   padding: 4rem 0;
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
+
+  .title {
+    grid-area: title;
+  }
+
+  .graphs {
+    grid-area: graphs;
+    min-width: 40vw;
+    max-height: 60vh;
+  }
+
+  .canvasContainer {
+    grid-area: canvas;
+  }
 }
 
 .canvasContainer {
   /* Nothing thus far */
   margin-top: 2em;
-  width: 90vw;
   height: 60vh;
 }
 

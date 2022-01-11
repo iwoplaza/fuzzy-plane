@@ -1,5 +1,6 @@
 import { FuzzyLogic, Fuzzifier, FuzzyVar, all, any } from '../fuzzy/logic';
 import { Trapezoid } from '../fuzzy/membership';
+import { CompoundShape } from '../fuzzy/membership/compound';
 
 export interface ControllerInput {
     leftBorderDistance: number;
@@ -10,14 +11,18 @@ export interface ControllerInput {
 
 export interface IController {
     computeTiltAcceleration(input: ControllerInput): number;
+    getInputVars(): FuzzyVar[];
+    getLogic(): FuzzyLogic;
 }
 
 export class Controller implements IController {
-    logic: FuzzyLogic;
+    private logic: FuzzyLogic;
+    public compoundShape: CompoundShape|null = null;
+    private inputVars: FuzzyVar[] = [];
 
     constructor() {
         const distance = new Fuzzifier([
-            ['very close', new Trapezoid().from(0, 0).to(10, 30)],
+            ['very close', new Trapezoid().from(-1, -1).to(10, 30)],
             ['close', new Trapezoid().from(10, 30).to(50, 200)],
             ['far', new Trapezoid().from(50, 200).to(200, 1000)],
         ]);
@@ -35,6 +40,8 @@ export class Controller implements IController {
         const leftEye = new FuzzyVar('left eye', distance);
         const rightEye = new FuzzyVar('right eye', distance);
 
+        this.inputVars.push(leftBorder, rightBorder, leftEye, rightEye);
+
         this.logic = new FuzzyLogic(tilt, [
             leftBorder,
             rightBorder,
@@ -42,19 +49,38 @@ export class Controller implements IController {
             rightEye
         ], {
             'big left':     any(rightEye.is('close'), rightEye.is('very close')),
-            'small left':   rightBorder.is('close'),
+            'small left':   any(rightBorder.is('close'), rightBorder.is('very close')),
             'neutral':      any(rightBorder.is('far'), leftBorder.is('far')),
-            'small right':  leftBorder.is('close'),
+            'small right':  any(leftBorder.is('close'), leftBorder.is('very close')),
             'big right':    any(leftEye.is('close'), leftEye.is('very close')),
         });
     }
 
     computeTiltAcceleration(input: ControllerInput): number {
-        return this.logic.determine({
+        // Doing this manually instead of calling logic.determine so that we can inspect the compound shape.
+
+        this.compoundShape = this.logic.constructCompoundShape({
             'left border': input.leftBorderDistance,
             'right border': input.rightBorderDistance,
             'left eye': input.leftEyeDistance,
             'right eye': input.rightEyeDistance
-        }) || 0;
+        });
+
+        let totalCenterOfMassTimesArea = this.compoundShape.getXCenterOfMassTimesArea(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 1);
+        let totalArea = this.compoundShape.getArea(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 1);
+
+        if (totalArea == 0) {
+            return 0;
+        }
+
+        return totalCenterOfMassTimesArea / totalArea;
+    }
+
+    getLogic(): FuzzyLogic {
+        return this.logic;
+    }
+
+    getInputVars(): FuzzyVar[] {
+        return this.inputVars;
     }
 }

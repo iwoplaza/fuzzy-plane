@@ -1,4 +1,4 @@
-import { AmbientLight, ArrowHelper, Clock, Fog, Object3D, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer } from 'three';
+import { AmbientLight, ArrowHelper, Clock, Fog, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer } from 'three';
 import { ContinuousBorder } from './continuousBorder';
 import { Controller, ControllerInput, IController } from './controller';
 import { Obstacles } from './obstacles';
@@ -9,14 +9,17 @@ function sigmoid(z) {
 }
 
 export class ThreeContext {
+    private containerElement: HTMLDivElement|null = null;
+    private onSimUpdated: () => void|null = null;
+
     private renderer: WebGLRenderer;
     private scene: Scene;
     private camera: PerspectiveCamera;
     private clock: Clock;
 
     private readonly roadWidth: number = 30;
-    private readonly leftEyeDirection: Vector3 = new Vector3(-0.1, 0, 1);
-    private readonly rightEyeDirection: Vector3 = new Vector3(0.1, 0, 1);
+    private readonly leftEyeDirection: Vector3 = new Vector3(0.1, 0, 1);
+    private readonly rightEyeDirection: Vector3 = new Vector3(-0.1, 0, 1);
 
     private plane: Plane;
     private leftBorder: ContinuousBorder;
@@ -31,11 +34,11 @@ export class ThreeContext {
         leftEyeDistance: Number.POSITIVE_INFINITY,
         rightEyeDistance: Number.POSITIVE_INFINITY,
     };
-    public controller: IController;
+    public controller: Controller;
     public planeTiltAcceleration = 0;
     public planeVelocityX: number = 0;
-
-    constructor(private readonly containerElement: HTMLDivElement) {
+    
+    constructor() {
         this.renderer = new WebGLRenderer();
         this.renderer.setPixelRatio(window.devicePixelRatio);
         const bgColor = 0xff33aaaa;
@@ -50,10 +53,6 @@ export class ThreeContext {
 
         const ambientLight = new AmbientLight(0xffffffff, 3);
         this.scene.add(ambientLight);
-
-        this.containerElement.innerHTML = '';
-        this.containerElement.appendChild(this.renderer.domElement);
-        this.updateCameraProjection(containerElement.clientWidth, containerElement.clientHeight);
 
         // Setting up the scene
         this.plane = new Plane();
@@ -78,7 +77,9 @@ export class ThreeContext {
 
         // Resize the canvas on window resize.
         window.addEventListener('resize', (e) => {
-            this.updateCameraProjection(containerElement.clientWidth, containerElement.clientHeight);
+            if (this.containerElement !== null) {
+                this.updateCameraProjection(this.containerElement.clientWidth, this.containerElement.clientHeight);
+            }
         }, false);
 
         // Setting up the render loop
@@ -88,6 +89,15 @@ export class ThreeContext {
         };
 
         renderLoop();
+    }
+
+    public mount(containerElement: HTMLDivElement, onSimUpdated: () => void) {
+        this.containerElement = containerElement;
+        this.containerElement.innerHTML = '';
+        this.containerElement.appendChild(this.renderer.domElement);
+        this.updateCameraProjection(containerElement.clientWidth, containerElement.clientHeight);
+
+        this.onSimUpdated = onSimUpdated;
     }
 
     private updateCameraProjection(width: number, height: number) {
@@ -114,7 +124,17 @@ export class ThreeContext {
         const delta = Math.min(this.clock.getDelta(), 0.5);
         this.plane.position.z += delta * 100;
         this.plane.position.x += this.planeVelocityX * delta;
-        this.plane.position.x = Math.max(-this.roadWidth / 2, Math.min(this.plane.position.x, this.roadWidth / 2));
+
+        // Wall collisions
+        if (this.plane.position.x > this.roadWidth / 2 && this.planeVelocityX > 0) {
+            this.planeVelocityX = 0;
+            this.plane.position.x = this.roadWidth / 2;
+        }
+
+        if (this.plane.position.x < -this.roadWidth / 2 && this.planeVelocityX < 0) {
+            this.planeVelocityX = 0;
+            this.plane.position.x = -this.roadWidth / 2;
+        }
 
         // Updating anchors
         this.camera.position.setZ(this.plane.position.z - 20);
@@ -125,13 +145,13 @@ export class ThreeContext {
         const rightDistance = this.computeRayDistance(this.rightEyeRayHelper.position, this.rightEyeDirection);
         this.rightEyeRayHelper.setLength(Math.min(rightDistance, 200));
 
-        this.controllerInput.leftBorderDistance = this.roadWidth / 2 + this.plane.position.x;
-        this.controllerInput.rightBorderDistance = this.roadWidth / 2 - this.plane.position.x;
+        this.controllerInput.leftBorderDistance = Math.abs(this.roadWidth / 2 - this.plane.position.x);
+        this.controllerInput.rightBorderDistance = Math.abs(-this.roadWidth / 2 - this.plane.position.x);
         this.controllerInput.leftEyeDistance = leftDistance;
         this.controllerInput.rightEyeDistance = rightDistance;
 
         this.planeTiltAcceleration = this.controller.computeTiltAcceleration(this.controllerInput) * 10;
-        this.planeVelocityX += this.planeTiltAcceleration * delta * 10;
+        this.planeVelocityX -= this.planeTiltAcceleration * delta * 10;
         this.plane.setRotationFromAxisAngle(new Vector3(0, 0, 1), sigmoid(-this.planeVelocityX * 0.1) * Math.PI / 2);
 
         this.leftBorder.updateViewerPosition(this.plane.position.z);
@@ -143,5 +163,9 @@ export class ThreeContext {
         
         // Rendering
         this.renderer.render(this.scene, this.camera);
+
+        if (this.onSimUpdated !== null) {
+            this.onSimUpdated();
+        }
     }
 }

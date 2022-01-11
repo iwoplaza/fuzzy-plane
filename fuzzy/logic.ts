@@ -1,5 +1,7 @@
 import { AsLineSegment } from './intersection/lineSegment';
 import { TrapezoidShape } from './membership';
+import { CompoundShape } from './membership/compound';
+import { CutoffShape } from './membership/cutoff';
 import { MembershipFunction, MembershipFunctionBuilder } from './membership/types';
 import { Vec2 } from './vector';
 
@@ -44,6 +46,14 @@ export class FuzzyVar {
             },
         };
     }
+
+    getFuzzifier(): Fuzzifier {
+        return this.fuzzifier;
+    }
+
+    getKey(): string {
+        return this.key;
+    }
 }
 
 export interface IntersectionResolver<A extends MembershipFunction, B extends MembershipFunction> {
@@ -85,7 +95,7 @@ export class FuzzyLogic {
     private intersectionResolverMap: {[key: string]: IntersectionResolver<any, any>} = {};
 
     constructor(
-        private outputFuzzifier: Fuzzifier,
+        public readonly outputFuzzifier: Fuzzifier,
         private variables: FuzzyVar[],
         private rulesMap: {[key: string]: ICondition}
     ) {
@@ -101,9 +111,7 @@ export class FuzzyLogic {
         return this.intersectionResolverMap[typeA + '-' + typeB];
     }
 
-    public determine(values: {[key: string]: number}): number {
-        const breakpoints: { from: number, shapeIdx: number }[] = [];
-
+    public constructCompoundShape(values: {[key: string]: number}): CompoundShape {
         //  TODO This works, but overengineered for trapezoids.
         //  The simpler solution hinges on the membershipFunctions being sorted by occurrence from left to right.
         
@@ -118,24 +126,21 @@ export class FuzzyLogic {
                 
                 //     return aPoint[0] < bPoint[0] ? a : b;
                 // });
-                
-        
-        const functionsList = this.outputFuzzifier.membershipFunctions;
+
+        const breakpoints: { from: number, shapeIdx: number }[] = [];
         const certaintyMap: {[key: string]: number} = {};
+        const functionsList = this.outputFuzzifier.membershipFunctions;
         functionsList.forEach(([variableKey, ]) => certaintyMap[variableKey] = this.rulesMap[variableKey].computeCertainty(values));
 
-        console.log({ certaintyMap, values });
+        breakpoints.push({
+            from: Number.NEGATIVE_INFINITY,
+            shapeIdx: 0,
+        });
 
         // In this simpler solution, we assume the first function is the left-most function.
         let currentShapeIdx = 0;
         let intersection: { point: Vec2, nextShapeIdx: number }|null = null;
 
-        breakpoints.push({
-            from: Number.NEGATIVE_INFINITY,
-            shapeIdx: currentShapeIdx,
-        });
-
-        
         while (currentShapeIdx < functionsList.length) {
             const [varA, shapeA] = functionsList[currentShapeIdx];
 
@@ -174,22 +179,21 @@ export class FuzzyLogic {
             }
         }
 
-        console.log(breakpoints);
+        return new CompoundShape(breakpoints.map(b => {
+            const [varKey, func] = functionsList[b.shapeIdx];
 
-        let totalCenterOfMassTimesArea = 0;
-        let totalArea = 0;
+            return {
+                from: b.from,
+                shape: new CutoffShape(func, certaintyMap[varKey]),
+            };
+        }));
+    }
 
-        for (let i = 0; i < breakpoints.length; ++i) {
-            const breakpoint = breakpoints[i];
-            const nextBreakpoint = breakpoints[i + 1] || { from: Number.POSITIVE_INFINITY, shapeIdx: -1 };
-            
-            const [variable, shape] = functionsList[breakpoint.shapeIdx];
-            const area = shape.getArea(breakpoint.from, nextBreakpoint.from, certaintyMap[variable]);
-            const centerOfMassTimesArea = shape.getXCenterOfMassTimesArea(breakpoint.from, nextBreakpoint.from, certaintyMap[variable]);
+    public determine(values: {[key: string]: number}): number {
+        const compound = this.constructCompoundShape(values);
 
-            totalArea += area;
-            totalCenterOfMassTimesArea += centerOfMassTimesArea;
-        }
+        let totalCenterOfMassTimesArea = compound.getXCenterOfMassTimesArea(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 1);
+        let totalArea = compound.getArea(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, 1);
 
         if (totalArea == 0) {
             return null;
