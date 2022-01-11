@@ -4,6 +4,7 @@ export interface MembershipFunction {
      * The point (could be (-inf, y)) that is the first non-zero y value going from -inf. 
      */
     readonly leftMostNonZero: [number, number];
+    readonly rightMostNonZero: [number, number];
     evaluate(x: number): number;
     getArea(from: number, to: number, cutoffHeight: number): number;
     getXCenterOfMassTimesArea(from: number, to: number, cutoffHeight: number): number;

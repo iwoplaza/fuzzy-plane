@@ -136,6 +136,16 @@ export class ThreeContext {
             this.plane.position.x = -this.roadWidth / 2;
         }
 
+        // Damping velocity
+        const dampSpeed = 10;
+        if (this.planeVelocityX > 0) {
+            this.planeVelocityX = Math.max(0, this.planeVelocityX - delta * dampSpeed);
+        }
+
+        if (this.planeVelocityX < 0) {
+            this.planeVelocityX = Math.min(0, this.planeVelocityX + delta * dampSpeed);
+        }
+
         // Updating anchors
         this.camera.position.setZ(this.plane.position.z - 20);
 

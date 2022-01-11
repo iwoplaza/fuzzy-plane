@@ -10,6 +10,7 @@ import { MembershipFunction, MembershipFunctionBuilder } from './types';
 export class TrapezoidShape implements MembershipFunction {
     public readonly type = 'trapezoid' as const;
     public readonly leftMostNonZero: [number, number];
+    public readonly rightMostNonZero: [number, number];
 
     constructor(
         public fromLow: number,
@@ -24,6 +25,15 @@ export class TrapezoidShape implements MembershipFunction {
         else {
             // Instant jump to 1
             this.leftMostNonZero = [fromLow, 1];
+        }
+
+        if (toLow > toHigh) {
+            // Has a ramp
+            this.rightMostNonZero = [toLow, 0];
+        }
+        else {
+            // Instant jump to 1
+            this.rightMostNonZero = [toLow, 1];
         }
     }
 

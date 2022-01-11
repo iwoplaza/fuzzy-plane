@@ -53,6 +53,10 @@ export class CompoundShape implements MembershipFunction {
         throw new Error('Not implemented');
     }
 
+    get rightMostNonZero(): [number, number] {
+        throw new Error('Not implemented');
+    }
+
     public forEachSection(from: number, to: number, callback: (current: Breakpoint, next: Breakpoint, from: number, to: number) => void) {
         let breakpointIdx = this.getBreakpointIndexContainingX(from);
         let breakFrom = from;

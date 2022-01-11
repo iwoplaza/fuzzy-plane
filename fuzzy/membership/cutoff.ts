@@ -20,4 +20,8 @@ export class CutoffShape implements MembershipFunction {
     get leftMostNonZero(): [number, number] {
         return this.innerFunc.leftMostNonZero;
     }
+
+    get rightMostNonZero(): [number, number] {
+        return this.innerFunc.rightMostNonZero;
+    }
 }

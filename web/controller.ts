@@ -1,6 +1,7 @@
 import { FuzzyLogic, Fuzzifier, FuzzyVar, all, any } from '../fuzzy/logic';
 import { Trapezoid } from '../fuzzy/membership';
 import { CompoundShape } from '../fuzzy/membership/compound';
+import { NumericCompoundShape } from '../fuzzy/membership/numericCompound';
 
 export interface ControllerInput {
     leftBorderDistance: number;
@@ -17,11 +18,17 @@ export interface IController {
 
 export class Controller implements IController {
     private logic: FuzzyLogic;
-    public compoundShape: CompoundShape|null = null;
+    public compoundShape: NumericCompoundShape|null = null;
     private inputVars: FuzzyVar[] = [];
 
     constructor() {
         const distance = new Fuzzifier([
+            ['very close', new Trapezoid().from(-1, -1).to(4, 10)],
+            ['close', new Trapezoid().from(4, 10).to(30, 60)],
+            ['far', new Trapezoid().from(30, 60).to(1000, Number.POSITIVE_INFINITY)],
+        ]);
+
+        const obstacleDistance = new Fuzzifier([
             ['very close', new Trapezoid().from(-1, -1).to(10, 30)],
             ['close', new Trapezoid().from(10, 30).to(50, 200)],
             ['far', new Trapezoid().from(50, 200).to(200, 1000)],
@@ -37,8 +44,8 @@ export class Controller implements IController {
 
         const leftBorder = new FuzzyVar('left border', distance);
         const rightBorder = new FuzzyVar('right border', distance);
-        const leftEye = new FuzzyVar('left eye', distance);
-        const rightEye = new FuzzyVar('right eye', distance);
+        const leftEye = new FuzzyVar('left eye', obstacleDistance);
+        const rightEye = new FuzzyVar('right eye', obstacleDistance);
 
         this.inputVars.push(leftBorder, rightBorder, leftEye, rightEye);
 
@@ -48,18 +55,18 @@ export class Controller implements IController {
             leftEye,
             rightEye
         ], {
-            'big left':     any(rightEye.is('close'), rightEye.is('very close')),
+            'big left':     any(rightEye.is('close'), rightEye.is('very close'), rightBorder.is('very close')),
             'small left':   any(rightBorder.is('close'), rightBorder.is('very close')),
             'neutral':      any(rightBorder.is('far'), leftBorder.is('far')),
             'small right':  any(leftBorder.is('close'), leftBorder.is('very close')),
-            'big right':    any(leftEye.is('close'), leftEye.is('very close')),
+            'big right':    any(leftEye.is('close'), leftEye.is('very close'), leftBorder.is('very close')),
         });
     }
 
     computeTiltAcceleration(input: ControllerInput): number {
         // Doing this manually instead of calling logic.determine so that we can inspect the compound shape.
 
-        this.compoundShape = this.logic.constructCompoundShape({
+        this.compoundShape = this.logic.constructNumericCompoundShape({
             'left border': input.leftBorderDistance,
             'right border': input.rightBorderDistance,
             'left eye': input.leftEyeDistance,

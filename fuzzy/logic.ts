@@ -2,6 +2,7 @@ import { AsLineSegment } from './intersection/lineSegment';
 import { TrapezoidShape } from './membership';
 import { CompoundShape } from './membership/compound';
 import { CutoffShape } from './membership/cutoff';
+import { NumericCompoundShape } from './membership/numericCompound';
 import { MembershipFunction, MembershipFunctionBuilder } from './membership/types';
 import { Vec2 } from './vector';
 
@@ -186,6 +187,16 @@ export class FuzzyLogic {
                 from: b.from,
                 shape: new CutoffShape(func, certaintyMap[varKey]),
             };
+        }));
+    }
+
+    public constructNumericCompoundShape(values: {[key: string]: number}): NumericCompoundShape {
+        const certaintyMap: {[key: string]: number} = {};
+        const functionsList = this.outputFuzzifier.membershipFunctions;
+        functionsList.forEach(([variableKey, ]) => certaintyMap[variableKey] = this.rulesMap[variableKey].computeCertainty(values));
+
+        return new NumericCompoundShape(functionsList.map(([varKey, func]) => {
+            return new CutoffShape(func, certaintyMap[varKey]);
         }));
     }
 
