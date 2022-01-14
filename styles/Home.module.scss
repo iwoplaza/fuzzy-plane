@@ -18,8 +18,13 @@
 
   .graphs {
     grid-area: graphs;
-    min-width: 40vw;
+    min-width: 30vw;
     max-height: 60vh;
+
+    .inputGraphsGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
   }
 
   .canvasContainer {

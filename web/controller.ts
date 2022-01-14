@@ -1,6 +1,5 @@
-import { FuzzyLogic, Fuzzifier, FuzzyVar, all, any } from '../fuzzy/logic';
+import { FuzzyLogic, Fuzzifier, FuzzyVar, any } from '../fuzzy/logic';
 import { Trapezoid } from '../fuzzy/membership';
-import { CompoundShape } from '../fuzzy/membership/compound';
 import { NumericCompoundShape } from '../fuzzy/membership/numericCompound';
 
 export interface ControllerInput {

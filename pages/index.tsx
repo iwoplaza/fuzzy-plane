@@ -1,52 +1,88 @@
-import styles from '../styles/Home.module.scss';
 import Head from 'next/head';
-import { useRef, useEffect, useState } from 'react';
+import styles from '../styles/Home.module.scss';
 import { ThreeContext } from '../web/threeContext';
-import { CartesianGrid, Legend, Line, LineChart, Polygon, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Coordinate } from 'recharts/types/util/types';
-import { TrapezoidShape } from '../fuzzy/membership';
+import { useRef, useEffect, useState } from 'react';
+import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { FuzzyVariableChart, MembershipPointData } from '../components/FuzzyVariableChart';
+import { Fuzzifier } from '../fuzzy/logic';
 
 let threeContext: ThreeContext|null = null;
 
-interface TrapezoidData {
+interface FuzzyVarData {
     label: string;
-    points: Coordinate[];
+    functionLabels: string[];
+    points: MembershipPointData[];
+    domain: [number, number];
 }
 
-interface CompoundData {
-    x: number;
-    membership: number;
+const domains: {[key: string]: [number, number]} = {
+    'left border': [0, 70],
+    'right border': [0, 70],
+    'left eye': [0, 220],
+    'right eye': [0, 220],
+};
+
+function evaluateFuzzifier(fuzzifier: Fuzzifier, domain: [number, number], deltaX: number): { functionLabels: string[], points: MembershipPointData[] } {
+    const functions = fuzzifier.membershipFunctions;
+    const functionLabels = functions.map(([label, f]) => label);
+
+    const points = [];
+    for (let x = domain[0]; x <= domain[1]; x += deltaX) {
+        const point: MembershipPointData = {
+            x: Math.round(x * 100) / 100,
+        };
+
+        for (const [label, f] of functions) {
+            point[label] = f.evaluate(x);
+        }
+
+        points.push(point);
+    }
+
+    return {
+        functionLabels,
+        points,
+    };
 }
 
 export default function Home() {
     const canvasContainerRef = useRef<HTMLDivElement>();
     const [tiltAcceleration, setTiltAcceleration] = useState(0);
-    const [trapezoidDataList, setTrapezoidDataList] = useState<TrapezoidData[]>([]);
-    const [compoundData, setCompoundData] = useState<CompoundData[]>();
+    const [compoundData, setCompoundData] = useState<MembershipPointData[]>();
+    const [inputVarData, setInputVarData] = useState<FuzzyVarData[]>([]);
+    const [outputVarData, setOutputVarData] = useState<FuzzyVarData|null>(null);
 
     useEffect(() => {
         if (threeContext === null) {
             threeContext = new ThreeContext();
         }
 
+        setInputVarData(threeContext.controller.getInputVars().map(v => {
+            const domain = domains[v.getKey()];
+
+            return {
+                label: v.getKey(),
+                domain,
+                ...evaluateFuzzifier(v.getFuzzifier(), domain, 10),
+            };
+        }));
+
+        setOutputVarData(() => {
+            const domain = [-1, 1] as [number, number];
+            const fuzzifier = threeContext.controller.getLogic().outputFuzzifier;
+
+            return {
+                label: 'tilt',
+                domain,
+                ...evaluateFuzzifier(fuzzifier, domain, 0.1),
+            };
+        });
+
         threeContext.mount(canvasContainerRef.current, () => {
             setTiltAcceleration(threeContext.planeTiltAcceleration);
-            setTrapezoidDataList(threeContext.controller.getLogic().outputFuzzifier.membershipFunctions.map(([key, func]) => ({
-                label: key,
-                points: (() => {
-                    const { fromLow, fromHigh, toHigh, toLow } = (func as TrapezoidShape);
-
-                    return [
-                        { x: fromLow, y: 0 },
-                        { x: fromHigh, y: 1 },
-                        { x: toHigh, y: 1 },
-                        { x: toLow, y: 0 },
-                    ];
-                })()
-            })));
 
             setCompoundData(() => {
-                const data: CompoundData[] = [];
+                const data: MembershipPointData[] = [];
 
                 for (let x = -2; x <= 2; x += 0.1) {
                     data.push({
@@ -75,8 +111,26 @@ export default function Home() {
                 </h1>
                 <aside className={styles.graphs}>
                     <p>{tiltAcceleration}</p>
+                    <div className={styles.inputGraphsGrid}>
+                        {inputVarData.map(inputVar => (
+                            <FuzzyVariableChart
+                                key={inputVar.label}
+                                label={inputVar.label}
+                                functionLabels={inputVar.functionLabels}
+                                points={inputVar.points}
+                            />
+                        ))}
+                    </div>
+                    {outputVarData && (
+                        <FuzzyVariableChart
+                            key={outputVarData.label}
+                            label={outputVarData.label}
+                            functionLabels={outputVarData.functionLabels}
+                            points={outputVarData.points}
+                        />
+                    )}
                     <ResponsiveContainer width="100%" height="100%">
-                        <LineChart
+                        <AreaChart
                             width={500}
                             height={500}
                             data={compoundData}
@@ -86,8 +140,8 @@ export default function Home() {
                             <YAxis />
                             <Tooltip />
                             <Legend />
-                            <Line type="monotone" dataKey="membership" stroke="#82ca9d" />
-                        </LineChart>
+                            <Area type="monotone" dataKey="membership" stroke="#82ca9d" fill="#82ca9d" />
+                        </AreaChart>
                     </ResponsiveContainer>
                 </aside>
                 <div ref={canvasContainerRef} className={styles.canvasContainer}></div>

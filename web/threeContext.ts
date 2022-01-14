@@ -1,6 +1,6 @@
 import { AmbientLight, ArrowHelper, Clock, Fog, PerspectiveCamera, Raycaster, Scene, Vector3, WebGLRenderer } from 'three';
 import { ContinuousBorder } from './continuousBorder';
-import { Controller, ControllerInput, IController } from './controller';
+import { Controller, ControllerInput } from './controller';
 import { Obstacles } from './obstacles';
 import { Plane } from './plane';
 
